@@ -123,11 +123,26 @@ export class IoTProtocol {
 
         /* BODY */
         let remainBuffer: Buffer | null = null /* Remains data on buffer to be processed */
-        if (LCB & IOT_LCB_BODY && buffer.length >= offset + 2) {
+        if (LCB & IOT_LCB_BODY) {
 
-            request.bodyLength = buffer.readUInt16BE(offset)
+            let bodyLengthSize = 2
+            switch (request.method) {
+                case EIoTMethod.SIGNAL:
+                    bodyLengthSize = 1
+                    break
+                case EIoTMethod.STREAMING:
+                    bodyLengthSize = 4
+                    break
+            }
 
-            offset += 2
+            if (buffer.length < offset + bodyLengthSize) return
+
+            if(bodyLengthSize === 2 ) request.bodyLength = buffer.readUInt16BE(offset)
+            else if(bodyLengthSize === 1 ) request.bodyLength = buffer.readUInt8(offset)
+            else if(bodyLengthSize === 4 ) request.bodyLength = buffer.readUInt32BE(offset)
+            else return
+
+            offset += bodyLengthSize
 
             if ((buffer.length - offset) >= request.bodyLength) {
                 request.body = buffer.subarray(offset, offset + request.bodyLength)
