@@ -73,12 +73,12 @@ The Least Significant Control Byte. **REQUIRED**
 
 Methods Types
 
-|Name                 | Description                     | MCB::ID   | MCB::PATH | LCB::METHOD | LCB::HEADER | LCB::BODY | BODY::LENGTH            | Minimun Total Length  |
+|Name                 | Description                     | MCB::ID   | MCB::PATH | LCB::METHOD | LCB::HEADER | LCB::BODY | BODY::LENGTH            | Minimum Total Length  |
 |:--                  | :--                             | :--:      | :--:      | :--:        | :--:      | :--:        | :--                     | :--:                  |
 | *Signal*            | Ligthweight signals like events | 0         | 0/1       | `0b000001`  | 0/1       | 0/1         | *up to 255 bytes*       | 2 bytes               |
 | *Request*           | Request that needs response     | 1         | 0/1       | `0b000010`  | 0/1       | 0/1         | *up to 65535 bytes*     | 4 bytes               |
 | *Response*          | Request's response              | 1         | 0         | `0b000011`  | 0/1       | 0/1         | *up to 65535 bytes*     | 4 bytes               |
-| *Streaming*         | Streaming data                  | 1         | 0/1       | `0b000100`  | 0/1       | 0/1         | *up to (2^32 -1) bytes* | 4 bytes               |
+| *Streaming*         | Streaming data                  | 1         | 0/1       | `0b000100`  | 0/1       | 0/1         | *up to (2^32 -1) bytes* | 6 bytes               |
 
 
 ---
