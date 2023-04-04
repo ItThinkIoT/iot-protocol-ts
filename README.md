@@ -116,8 +116,10 @@ form, that, serves to identify a resource [URI > 3.3 Path](https://www.rfc-edito
 
 Format: `PATH + ETX`. **SINGLE**
 
+#### **PATH**
+
 * Type: `string`
-* Example: `/foo/bar` + `EXT`
+* Example: `/foo/bar`
   
 ---
 
@@ -127,7 +129,7 @@ Headers are be Key Value Pair that serves to set an attribute value for the requ
 
 Format: `HEADER + EXT`. **MULTIPLE**
 
-**HEADER**
+#### **HEADER**
 
 * Type: `string`
 * Format: `KEY + KEY_VALUE_SEPARATOR + VALUE`

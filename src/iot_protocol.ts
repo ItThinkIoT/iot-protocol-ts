@@ -266,7 +266,7 @@ export class IoTProtocol {
             ...(LSB & IOT_LCB_BODY) ? [...bufferBodyLength, ...request.body!] : ([]), /* BODY */
         ])
 
-        console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
+        // console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
 
         if (requestResponse) {
             if (!requestResponse.timeout) requestResponse.timeout = 1000;
