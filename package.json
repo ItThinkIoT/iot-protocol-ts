@@ -1,0 +1,26 @@
+{
+  "name": "iot-protocol-ts",
+  "version": "1.0.0",
+  "description": "IoT Protocol Library for Typescript",
+  "main": "dist/iot_protocol.js",
+  "exports": "./src/iot_protocol.ts",
+  "type": "module",
+  "engines": {
+    "node": ">=14.16"
+  },
+  "scripts": {
+    "build": "rm -rf ./dist && tsc -b"
+  },
+  "keywords": [
+    "iot",
+    "iot_protocol",
+    "protocol"
+  ],
+  "author": "Guihgo",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^18.15.0",
+    "typescript": "^4.9.5"
+  },
+  "dependencies": {}
+}
