@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "rm -rf ./dist && rm -rf tsconfig.tsbuildinfo && tsc -b",
-    "publish": "yarn build && npm publish"
+    "pub": "yarn build"
   },
   "keywords": [
     "iot",
