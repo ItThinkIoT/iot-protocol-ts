@@ -1,6 +1,6 @@
 {
   "name": "iot-protocol-ts",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "IoT Protocol Library for Typescript",
   "main": "dist/iot_protocol.js",
   "type": "module",
@@ -8,7 +8,8 @@
     "node": ">=14.16"
   },
   "scripts": {
-    "build": "rm -rf ./dist && tsc -b"
+    "build": "rm -rf ./dist && rm -rf tsconfig.tsbuildinfo && tsc -b",
+    "publish": "yarn build && npm publish"
   },
   "keywords": [
     "iot",
