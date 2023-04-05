@@ -218,38 +218,36 @@ export class IoTProtocol {
         }
 
         let MCB = request.version << 2
-        let LSB = request.method! << 2
+        let LCB = request.method! << 2
 
-        let bufferBodyLength = Buffer.allocUnsafe(2)
-        if (request.body) bufferBodyLength.writeUInt16BE(request.body!.byteLength)
+        let bodyLengthBuffer = Buffer.allocUnsafe(2)
+        if (request.body) bodyLengthBuffer.writeUInt16BE(request.body!.byteLength)
 
+        LCB += (((Object.keys(request.headers || {}).length > 0) ? IOT_LCB_HEADER : 0) + ((request.body) ? IOT_LCB_BODY : 0))
+        
         switch (request.method) {
             case EIoTMethod.SIGNAL:
                 MCB += (((request.path) ? IOT_MCB_PATH : 0))
-                LSB += (((Object.keys(request.headers || {}).length > 0) ? IOT_LCB_HEADER : 0) + ((request.body) ? IOT_LCB_BODY : 0))
 
-                bufferBodyLength = Buffer.allocUnsafe(1)
-                if (request.body) bufferBodyLength.writeUInt8(request.body!.byteLength)
+                bodyLengthBuffer = Buffer.allocUnsafe(1)
+                if (request.body) bodyLengthBuffer.writeUInt8(request.body!.byteLength)
                 break
             case EIoTMethod.REQUEST:
-                MCB += ((0b10) + ((request.path) ? 0b01 : 0))
-                LSB += (((Object.keys(request.headers || {}).length > 0) ? IOT_LCB_HEADER : 0) + ((request.body) ? IOT_LCB_BODY : 0))
+                MCB += ((IOT_MCB_ID) + ((request.path) ? IOT_MCB_PATH : 0))
                 break
             case EIoTMethod.RESPONSE:
-                MCB += ((0b10))
-                LSB += (((Object.keys(request.headers || {}).length > 0) ? IOT_LCB_HEADER : 0) + ((request.body) ? IOT_LCB_BODY : 0))
+                MCB += ((IOT_MCB_ID))
                 break
             case EIoTMethod.STREAMING:
-                MCB += ((0b10) + ((request.path) ? 0b01 : 0))
-                LSB += (((Object.keys(request.headers || {}).length > 0) ? IOT_LCB_HEADER : 0) + ((request.body) ? IOT_LCB_BODY : 0))
+                MCB += ((IOT_MCB_ID) + ((request.path) ? IOT_MCB_PATH : 0))
 
                 /* BODY LENGTH = uint32_t (4 bytes) */
-                bufferBodyLength = Buffer.allocUnsafe(4)
-                if (request.body) bufferBodyLength.writeUInt32BE(request.body!.byteLength)
+                bodyLengthBuffer = Buffer.allocUnsafe(4)
+                if (request.body) bodyLengthBuffer.writeUInt32BE(request.body!.byteLength)
                 break
         }
 
-        const controlBytes = Buffer.from([MCB, LSB])
+        const controlBytes = Buffer.from([MCB, LCB])
 
         /* ID */
         const bufferId = Buffer.allocUnsafe(2)
@@ -262,8 +260,8 @@ export class IoTProtocol {
             ...controlBytes,
             ...(MCB & IOT_MCB_ID) ? bufferId : [], /* ID */
             ...(MCB & IOT_MCB_PATH) ? [...Buffer.from(request.path!), ...Buffer.from([IOT_ETX])] : [], /* PATH */
-            ...(LSB & IOT_LCB_HEADER) ? Buffer.concat(Object.keys(request.headers!).map(key => Buffer.from([...Buffer.from(key), IOT_RS, ...Buffer.from(request.headers![key]), IOT_ETX]))) : ([]), /* HEADERs */
-            ...(LSB & IOT_LCB_BODY) ? [...bufferBodyLength, ...request.body!] : ([]), /* BODY */
+            ...(LCB & IOT_LCB_HEADER) ? Buffer.concat(Object.keys(request.headers!).map(key => Buffer.from([...Buffer.from(key), IOT_RS, ...Buffer.from(request.headers![key]), IOT_ETX]))) : ([]), /* HEADERs */
+            ...(LCB & IOT_LCB_BODY) ? [...bodyLengthBuffer, ...request.body!] : ([]), /* BODY */
         ])
 
         // console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
