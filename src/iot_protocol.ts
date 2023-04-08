@@ -75,7 +75,7 @@ export class IoTProtocol {
     }
 
     onData(client: TLSSocket | Socket, buffer: Buffer) {
-        console.log("on data...", `[${buffer.length}] [${buffer.join(" , ")}]`)
+        // console.log("on data...", `[${buffer.length}] [${buffer.join(" , ")}]`)
         // console.log("on data...", `[${buffer.length}] > ${buffer.toString()}`)
 
         let request: IoTRequest = {
@@ -319,8 +319,7 @@ export class IoTProtocol {
 
                     request.client!.write(buffer, async () => {
 
-                        console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
-
+                        // console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
 
                         parts++
 
