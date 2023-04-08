@@ -7,10 +7,10 @@ IoT Protocol is a protocol over TCP based on HTTP and MQTT for lightweight data 
 
   2. MQTT (*mqtt://*) is a publish-subscribe messaging protocol, use lightweight data traffic. Its minimum request size is 2 bytes. But it is not stateless and does not provide a request/response pattern, so it isn't restful. MQTT is designed to be a lightweight protocol that minimizes network overhead, which can make it more challenging to handle large or complex data payloads.
 
-The **IOT PROTOCOL** (*iot://*) is base on HTTP and MQTT protocols. Is a request-response model adapted for IoT context designed for low-bandwidth, low-power devices. Its minimum request size is 2 bytes without requiring the HOST param for all requests. Supports Full Duplex and can be used for real-time communication up to 255 bytes, middleweight request up to (2^16 -1) bytes (~65Kb) and streaming up to (2^32 -1) bytes (~4.29Gb). Can use TLS/SSL encryption to secure their communications.
+The **IOT PROTOCOL** (*iot://*) is based on HTTP and MQTT protocols over TCP/IP. Is a request-response model adapted for IoT context designed for low-bandwidth, low-power devices. Its minimum request size is 2 bytes without requiring the HOST param for all requests. Supports Full Duplex and can be used for real-time communication up to 255 bytes, middleweight request up to (2^16 -1) bytes (~65Kb) and streaming up to (2^32 -1) bytes (~4.29Gb). Can use TLS/SSL encryption to secure their communications.
 
 
-IOT PROTOCOL uses middlewares and router's filtering features based on [express nodejs module](https://expressjs.com/) at its Layer Application. Yes, you can use `.use(middleware)`, `.use('/path/to/your/resource', router)`, `response.send(data)` methods to handle the requests.
+IOT PROTOCOL uses middlewares and router's filtering features based on [express nodejs module](https://expressjs.com/) under its Layer Application. Yes, you can use `.use(middleware)`, `.use('/path/to/your/resource', router)`, `response.send(data)` methods to handle the requests.
 
 
 ## Features
@@ -28,8 +28,8 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 ```
 <MSCB + LSCB>
 [ID]
-[PATH + ETX]
-[HEADER + ETX]
+[PATH + IOT_ETX]
+[HEADER + IOT_ETX]
 [BODY_LENGTH + BODY] 
 ```
 
@@ -37,7 +37,7 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 
 > `[...]` OPTIONAL
 
-> `[PATH + ETX] + [HEADER + ETX]` **MUST NOT BE MORE THAN 1016 Bytes** 
+> `[PATH + IOT_ETX] + [HEADER + IOT_ETX]` **MUST NOT BE MORE THAN 1016 Bytes** 
 > 
 >       + 1024 Bytes : IOT_PROTOCOL_BUFFER_SIZE
 >          - 1 Byte  : MSCB_SIZE 
@@ -45,7 +45,7 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 >          - 2 Bytes : ID_SIZE 
 >          - 4 Bytes : BODY_LENGTH_MAXIMUM_SIZE (Streaming)
 >        ----------------
->          + 1016 Bytes : [PATH + ETX]_SIZE + [HEADER + ETX]_SIZE
+>          + 1016 Bytes : [PATH + IOT_ETX]_SIZE + [HEADER + IOT_ETX]_SIZE
 > 
 >     |--------------------------------IOT_PROTOCOL_BUFFER_SIZE(1024)-----------------------------|
 >
@@ -62,6 +62,33 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 >                                                                |--BODY_LENGTH_MAXIMUM_SIZE(4)--|
 > 
 > 
+
+---
+
+### IOT_ETX
+
+**IOT_ETX** byte serves to determine end of text
+
+* Type: `char` | `byte` | `uint8_t`
+* Size: `1 byte`
+* Constant: 
+  * char: `ETX` [Unicode - *End Of Text*](https://www.compart.com/en/unicode/U+0003)
+  * hex: `0x3`
+  * decimal: `3`
+  * binary: `0b11`
+
+---
+### IOT_RS
+
+**IOT_RS** byte serves as record or key value pair separator
+
+* Type: `char` | `byte` | `uint8_t`
+* Size: `1 byte`
+* Constant: 
+  * char: `RS` [Unicode - *Information Separator Two - RecordSeparator RS*](https://www.compart.com/en/unicode/U+001E)
+  * hex: `0x1E`
+  * decimal: `30`
+  * binary: `0b011110`
 
 ---
 ### [0] **MSCB**: MSB_CONTROL_BYTE
@@ -110,20 +137,6 @@ Methods Types
 
 ---
 
-### ETX
-
-**ETX** byte serves to determine end of text
-
-* Type: `char` | `byte` | `uint8_t`
-* Size: `1 byte`
-* Constant: 
-  * char: `ETX` [Unicode - *End Of Text*](https://www.compart.com/en/unicode/U+0003)
-  * hex: `0x3`
-  * decimal: `3`
-  * binary: `0b11`
-
----
-
 ### [2] **ID**: 
 
 Unsigned random number with up to 2^16 that identifies the request. **SINGLE**
@@ -141,7 +154,7 @@ Unsigned random number with up to 2^16 that identifies the request. **SINGLE**
 The path component contains data, usually organized in hierarchical
 form, that, serves to identify a resource [URI > 3.3 Path](https://www.rfc-editor.org/info/rfc3986). 
 
-Format: `PATH + ETX`. **SINGLE**
+Format: `PATH + IOT_ETX`. **SINGLE**
 
 #### **PATH**
 
@@ -154,24 +167,16 @@ Format: `PATH + ETX`. **SINGLE**
 
 Headers are be Key Value Pair that serves to set an attribute value for the request. Case sensitive.  
 
-Format: `HEADER + EXT`. **MULTIPLE**
+Format: `HEADER + IOT_ETX`. **MULTIPLE**
 
 #### **HEADER**
 
 * Type: `string`
-* Format: `KEY + KEY_VALUE_SEPARATOR + VALUE`
+* Format: `KEY + IOT_RS + VALUE`
 * *KEY*: 
   * Type: `string`
 * *VALUE*: 
   * Type: `string`
-* *KEY_VALUE_SEPARATOR*: 
-  * Type: `char` | `byte` | `uint8_t`
-  * Size: `1 byte`
-  * Constant: 
-    * char: `RS` [Unicode - *Information Separator Two - RecordSeparator RS*](https://www.compart.com/en/unicode/U+001E)
-    * hex: `0x1E`
-    * decimal: `30`
-    * binary: `0b011110`
 * Example: 
   * Single header: `["foo", 0x1E, "bar", 0x3]`
   * Multiple headers: `["foo", 0x1E, "bar", 0x3, "lorem", 0x1E, "ipsum", 0x3]`
