@@ -88,40 +88,44 @@ export class IoTProtocol {
             client
         }
 
-        let offset = 2
+        let offset = 0
 
         if (buffer.length < offset) return
 
-        const MSCB = buffer.at(0)!
-        const LSCB = buffer.at(1)!
+        const MSCB = buffer.at(offset)!
+        const LSCB = buffer.at(++offset)!
 
         request.version = MSCB >> 2
         request.method = LSCB >> 2
 
         /* ID */
         if (MSCB & IOT_MSCB_ID && buffer.length >= offset + 2) {
-            request.id = buffer.readUInt16BE(offset)
-            offset += 2
+            request.id = buffer.readUInt16BE(++offset)
+            offset++
         }
 
         /* PATH */
         if (MSCB & IOT_MSCB_PATH) {
-            const indexEXT = buffer.indexOf(IOT_ETX, offset)
+            const indexEXT = buffer.indexOf(IOT_ETX, ++offset)
             if (indexEXT > -1) {
                 request.path = buffer.subarray(offset, indexEXT).toString()
-                offset = indexEXT + 1
+                offset = indexEXT
             }
         }
 
         /* HEADER */
         if (LSCB & IOT_LSCB_HEADER) {
             request.headers = {}
+
+            offset++
             let indexKeyValue = -1
             let indexEXT = -1
             while ((indexKeyValue = buffer.indexOf(IOT_RS, offset)) && ((indexEXT = buffer.indexOf(IOT_ETX, offset + 1)) != -1) && indexKeyValue < indexEXT - 1) {
                 request.headers![buffer.subarray(offset, indexKeyValue).toString()] = buffer.subarray(indexKeyValue + 1, indexEXT).toString()
                 offset = indexEXT + 1
             }
+
+            offset--
         }
 
         /* BODY */
@@ -138,23 +142,30 @@ export class IoTProtocol {
                     break
             }
 
-            if (bodyLengthSize === 2) request.bodyLength = buffer.readUInt16BE(offset)
-            else if (bodyLengthSize === 1) request.bodyLength = buffer.readUInt8(offset)
-            else if (bodyLengthSize === 4) request.bodyLength = buffer.readUInt32BE(offset)
-            else return
-
-            offset += bodyLengthSize
-
-            if ((buffer.length - offset) >= request.bodyLength) {
-                request.body = buffer.subarray(offset, offset + request.bodyLength)
-                offset += request.bodyLength
-
-                if (buffer.length >= offset) {
-                    remainBuffer = buffer.subarray(offset)
-                }
-            } else /* Incomplete data */ {
-
+            request.bodyLength = 0
+            for (let i = bodyLengthSize; i > 0; i--) {
+                request.bodyLength += buffer.at(++offset)! << ((i - 1) * 8)
             }
+
+            /* Single Request */
+            /* ...(17) EXT (18) 0 (19) 30 | (20) B (21) B (22) B + ...25B + (48) B , (49) B , (50) */
+
+            /* Multi Request */
+            /* ...(17) EXT (18) 4 (19) 36 | (20) B (21) B (22) B + ...999B + (1022) B , (1023) B , (1024) */
+            /* ...(17) EXT (18) 4 (19) 36 | (20) B (21) B (22) B + ...51B + (74) B , (75) B , (76) */
+
+            offset++ //20
+            let bodyEndIndex = offset + request.bodyLength // 50 // 1080 | 1080
+            let bodyIncomeLength = (buffer.length - offset) //50 - 20 = 30 // 1024 - 20 = 1004 | 76 - 20 = 56
+
+            if (bodyIncomeLength > request.bodyLength) /* Income more than one request, so forward to next onData(remainBuffer) */ {
+                remainBuffer = buffer.subarray(bodyEndIndex)
+            } else if (bodyIncomeLength < request.bodyLength) /* Part Body data */ {
+                bodyEndIndex = buffer.length // 1024 | 76
+            }
+
+            request.body = buffer.subarray(offset, bodyEndIndex) //[20-50] //[20-1024] | [20-76]
+            offset = bodyEndIndex - 1
         }
 
         /* Response */
@@ -302,7 +313,7 @@ export class IoTProtocol {
                         ...prefixDataBuffer,
                         ...bodyBuffer.subarray(i, bodyUntilIndex)
                     ])
-                    i = bodyUntilIndex + 1
+                    i = bodyUntilIndex /* + 1 */
 
                     await delayPromise(this.delay)
 
@@ -310,7 +321,7 @@ export class IoTProtocol {
 
                         console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
 
-                       
+
                         parts++
 
                         if (i >= bodyBuffer.length) {
@@ -318,7 +329,7 @@ export class IoTProtocol {
                         } else {
                             return res(writeBodyPart(i, parts))
                         }
-                        
+
                     })
                 })
             }

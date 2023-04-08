@@ -65,6 +65,15 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 
 ---
 
+### IOT_PROTOCOL_BUFFER_SIZE
+
+**IOT_PROTOCOL_BUFFER_SIZE** is the maximum size to send or to receive per request. If `all data length > IOT_PROTOCOL_BUFFER_SIZE`, the data is broken in parts of *IOT_PROTOCOL_BUFFER_SIZE* length. Each part keeps the prefixed data (`MSCB + LSCB + ID + PATH + HEADER + BODY_LENGTH`) and attachs the remain body until its length is *IOT_PROTOCOL_BUFFER_SIZE* length or less.
+
+* Type: `size_t` | `uint32_t`
+* Size: `4 bytes`
+* Default value: `1024`
+---
+
 ### IOT_ETX
 
 **IOT_ETX** byte serves to determine end of text
