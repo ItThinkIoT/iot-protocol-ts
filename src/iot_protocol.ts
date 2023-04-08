@@ -18,6 +18,7 @@ export interface IoTRequest {
     },
     body?: Buffer,
     bodyLength?: number,
+    parts?: number
     client: TLSSocket | Socket
 }
 
@@ -31,13 +32,15 @@ export interface IoTRequestResponse {
 
 export const IOT_VERSION = 0b000001;
 
+export const IOT_PROTOCOL_BUFFER_SIZE = 1024;
+
 export const IOT_ETX = 0x3
 export const IOT_RS = 0x1E
 
-export const IOT_MCB_ID = 0b00000010
-export const IOT_MCB_PATH = 0b00000001
-export const IOT_LCB_HEADER = 0b00000010
-export const IOT_LCB_BODY = 0b00000001
+export const IOT_MSCB_ID = 0b00000010
+export const IOT_MSCB_PATH = 0b00000001
+export const IOT_LSCB_HEADER = 0b00000010
+export const IOT_LSCB_BODY = 0b00000001
 
 const delayPromise = async (delayMs: number) => {
     return new Promise<void>((resolve) => {
@@ -55,7 +58,7 @@ export class IoTProtocol {
         [id: number]: IoTRequestResponse
     } = {}
 
-    constructor(public delay = 400) {
+    constructor(public delay = 300) {
         this.middlewares = [];
     }
 
@@ -72,7 +75,7 @@ export class IoTProtocol {
     }
 
     onData(client: TLSSocket | Socket, buffer: Buffer) {
-        // console.log("on data...", `[${buffer.length}] [${buffer.join(" , ")}]`)
+        console.log("on data...", `[${buffer.length}] [${buffer.join(" , ")}]`)
         // console.log("on data...", `[${buffer.length}] > ${buffer.toString()}`)
 
         let request: IoTRequest = {
@@ -89,20 +92,20 @@ export class IoTProtocol {
 
         if (buffer.length < offset) return
 
-        const MCB = buffer.at(0)!
-        const LCB = buffer.at(1)!
+        const MSCB = buffer.at(0)!
+        const LSCB = buffer.at(1)!
 
-        request.version = MCB >> 2
-        request.method = LCB >> 2
+        request.version = MSCB >> 2
+        request.method = LSCB >> 2
 
         /* ID */
-        if (MCB & IOT_MCB_ID && buffer.length >= offset + 2) {
+        if (MSCB & IOT_MSCB_ID && buffer.length >= offset + 2) {
             request.id = buffer.readUInt16BE(offset)
             offset += 2
         }
 
         /* PATH */
-        if (MCB & IOT_MCB_PATH) {
+        if (MSCB & IOT_MSCB_PATH) {
             const indexEXT = buffer.indexOf(IOT_ETX, offset)
             if (indexEXT > -1) {
                 request.path = buffer.subarray(offset, indexEXT).toString()
@@ -111,7 +114,7 @@ export class IoTProtocol {
         }
 
         /* HEADER */
-        if (LCB & IOT_LCB_HEADER) {
+        if (LSCB & IOT_LSCB_HEADER) {
             request.headers = {}
             let indexKeyValue = -1
             let indexEXT = -1
@@ -123,7 +126,7 @@ export class IoTProtocol {
 
         /* BODY */
         let remainBuffer: Buffer | null = null /* Remains data on buffer to be processed */
-        if (LCB & IOT_LCB_BODY) {
+        if (LSCB & IOT_LSCB_BODY) {
 
             let bodyLengthSize = 2
             switch (request.method) {
@@ -135,11 +138,9 @@ export class IoTProtocol {
                     break
             }
 
-            if (buffer.length < offset + bodyLengthSize) return
-
-            if(bodyLengthSize === 2 ) request.bodyLength = buffer.readUInt16BE(offset)
-            else if(bodyLengthSize === 1 ) request.bodyLength = buffer.readUInt8(offset)
-            else if(bodyLengthSize === 4 ) request.bodyLength = buffer.readUInt32BE(offset)
+            if (bodyLengthSize === 2) request.bodyLength = buffer.readUInt16BE(offset)
+            else if (bodyLengthSize === 1) request.bodyLength = buffer.readUInt8(offset)
+            else if (bodyLengthSize === 4) request.bodyLength = buffer.readUInt32BE(offset)
             else return
 
             offset += bodyLengthSize
@@ -148,9 +149,11 @@ export class IoTProtocol {
                 request.body = buffer.subarray(offset, offset + request.bodyLength)
                 offset += request.bodyLength
 
-                if (offset > buffer.length) {
+                if (buffer.length >= offset) {
                     remainBuffer = buffer.subarray(offset)
                 }
+            } else /* Incomplete data */ {
+
             }
         }
 
@@ -217,29 +220,29 @@ export class IoTProtocol {
             request.version = IOT_VERSION
         }
 
-        let MCB = request.version << 2
-        let LCB = request.method! << 2
+        let MSCB = request.version << 2
+        let LSCB = request.method! << 2
 
         let bodyLengthBuffer = Buffer.allocUnsafe(2)
         if (request.body) bodyLengthBuffer.writeUInt16BE(request.body!.byteLength)
 
-        LCB += (((Object.keys(request.headers || {}).length > 0) ? IOT_LCB_HEADER : 0) + ((request.body) ? IOT_LCB_BODY : 0))
-        
+        LSCB += (((Object.keys(request.headers || {}).length > 0) ? IOT_LSCB_HEADER : 0) + ((request.body) ? IOT_LSCB_BODY : 0))
+
         switch (request.method) {
             case EIoTMethod.SIGNAL:
-                MCB += (((request.path) ? IOT_MCB_PATH : 0))
+                MSCB += (((request.path) ? IOT_MSCB_PATH : 0))
 
                 bodyLengthBuffer = Buffer.allocUnsafe(1)
                 if (request.body) bodyLengthBuffer.writeUInt8(request.body!.byteLength)
                 break
             case EIoTMethod.REQUEST:
-                MCB += ((IOT_MCB_ID) + ((request.path) ? IOT_MCB_PATH : 0))
+                MSCB += ((IOT_MSCB_ID) + ((request.path) ? IOT_MSCB_PATH : 0))
                 break
             case EIoTMethod.RESPONSE:
-                MCB += ((IOT_MCB_ID))
+                MSCB += ((IOT_MSCB_ID))
                 break
             case EIoTMethod.STREAMING:
-                MCB += ((IOT_MCB_ID) + ((request.path) ? IOT_MCB_PATH : 0))
+                MSCB += ((IOT_MSCB_ID) + ((request.path) ? IOT_MSCB_PATH : 0))
 
                 /* BODY LENGTH = uint32_t (4 bytes) */
                 bodyLengthBuffer = Buffer.allocUnsafe(4)
@@ -247,50 +250,94 @@ export class IoTProtocol {
                 break
         }
 
-        const controlBytes = Buffer.from([MCB, LCB])
+        const controlBytes = Buffer.from([MSCB, LSCB])
 
         /* ID */
-        const bufferId = Buffer.allocUnsafe(2)
-        if (MCB & IOT_MCB_ID) {
+        let idBuffer = Buffer.allocUnsafe(2)
+        if (MSCB & IOT_MSCB_ID) {
             if (!request.id) request.id = this.generateRequestId()
-            bufferId.writeUInt16BE(request.id)
+            idBuffer.writeUInt16BE(request.id)
+        } else {
+            idBuffer = Buffer.from([])
         }
 
-        const buffer = Buffer.from([
-            ...controlBytes,
-            ...(MCB & IOT_MCB_ID) ? bufferId : [], /* ID */
-            ...(MCB & IOT_MCB_PATH) ? [...Buffer.from(request.path!), ...Buffer.from([IOT_ETX])] : [], /* PATH */
-            ...(LCB & IOT_LCB_HEADER) ? Buffer.concat(Object.keys(request.headers!).map(key => Buffer.from([...Buffer.from(key), IOT_RS, ...Buffer.from(request.headers![key]), IOT_ETX]))) : ([]), /* HEADERs */
-            ...(LCB & IOT_LCB_BODY) ? [...bodyLengthBuffer, ...request.body!] : ([]), /* BODY */
-        ])
+        /* PATH */
+        const pathBuffer = (MSCB & IOT_MSCB_PATH) ? [...Buffer.from(request.path!), ...Buffer.from([IOT_ETX])] : []
 
-        // console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
+        /* HEADERs */
+        const headerBuffer = (LSCB & IOT_LSCB_HEADER) ? Buffer.concat(Object.keys(request.headers!).map(key => Buffer.from([...Buffer.from(key), IOT_RS, ...Buffer.from(request.headers![key]), IOT_ETX]))) : ([])
+
+        if ((pathBuffer.length + headerBuffer.length) > IOT_PROTOCOL_BUFFER_SIZE - 8) {
+            throw new Error("Path and Headers too big")
+        }
+
+        /* BODY */
+        let bodyBuffer = Buffer.from([])
+        if ((LSCB & IOT_LSCB_BODY)) {
+            bodyBuffer = Buffer.from([...request.body!])
+        } else {
+            bodyLengthBuffer = Buffer.from([])
+        }
+
+        const prefixDataBuffer = Buffer.from([
+            ...controlBytes,
+            ...idBuffer, /* ID */
+            ...pathBuffer, /* PATH */
+            ...headerBuffer, /* HEADERs */
+            ...bodyLengthBuffer /* BODY LENGTH */
+        ])
 
         if (requestResponse) {
             if (!requestResponse.timeout) requestResponse.timeout = 1000;
             this.requestResponse[request.id!] = requestResponse
         }
 
-        return new Promise<IoTRequest>((resolve) => {
-            request.client!.write(buffer, async () => {
+        return new Promise<IoTRequest>(async (resolve) => {
 
-                // await delayPromise(this.delay)
+            const writeBodyPart = async (i = 0, parts = 0) => {
+                return new Promise<number>(async (res) => {
+                    const bodyBufferRemain = (bodyBuffer.length - i)
+                    const bodyUntilIndex = ((bodyBufferRemain + prefixDataBuffer.length) > IOT_PROTOCOL_BUFFER_SIZE) ? i + (IOT_PROTOCOL_BUFFER_SIZE - prefixDataBuffer.length) : i + bodyBufferRemain  //1004 // 1060
+                    const buffer = Buffer.from([
+                        ...prefixDataBuffer,
+                        ...bodyBuffer.subarray(i, bodyUntilIndex)
+                    ])
+                    i = bodyUntilIndex + 1
 
-                resolve(request)
+                    await delayPromise(this.delay)
 
-                /* Timeout */
-                if (requestResponse) {
-                    setTimeout(() => {
-                        if (this.requestResponse[request.id!]) {
-                            if (this.requestResponse[request.id!].onTimeout) {
-                                this.requestResponse[request.id!].onTimeout!(request);
-                            }
-                            delete this.requestResponse[request.id!]
+                    request.client!.write(buffer, async () => {
+
+                        console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
+
+                       
+                        parts++
+
+                        if (i >= bodyBuffer.length) {
+                            return res(parts)
+                        } else {
+                            return res(writeBodyPart(i, parts))
                         }
-                    }, requestResponse.timeout)
-                }
+                        
+                    })
+                })
+            }
 
-            })
+            request.parts = await writeBodyPart()
+
+            /* Timeout */
+            if (requestResponse) {
+                setTimeout(() => {
+                    if (this.requestResponse[request.id!]) {
+                        if (this.requestResponse[request.id!].onTimeout) {
+                            this.requestResponse[request.id!].onTimeout!(request);
+                        }
+                        delete this.requestResponse[request.id!]
+                    }
+                }, requestResponse.timeout)
+            }
+
+            return resolve(request)
         })
     }
 

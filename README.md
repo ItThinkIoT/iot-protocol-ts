@@ -19,13 +19,14 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
   - Minimum request size is 2 bytes
   - Request-response model like HTTP protocol
   - Adaptive requests methods for optimizing data length
+  - Multipart (Send large data)
 
 ---
 
 ## Preamble Version 1
 
 ```
-<MCB + LCB>
+<MSCB + LSCB>
 [ID]
 [PATH + ETX]
 [HEADER + ETX]
@@ -36,8 +37,34 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 
 > `[...]` OPTIONAL
 
+> `[PATH + ETX] + [HEADER + ETX]` **MUST NOT BE MORE THAN 1016 Bytes** 
+> 
+>       + 1024 Bytes : IOT_PROTOCOL_BUFFER_SIZE
+>          - 1 Byte  : MSCB_SIZE 
+>          - 1 Byte  : LSCB_SIZE 
+>          - 2 Bytes : ID_SIZE 
+>          - 4 Bytes : BODY_LENGTH_MAXIMUM_SIZE (Streaming)
+>        ----------------
+>          + 1016 Bytes : [PATH + ETX]_SIZE + [HEADER + ETX]_SIZE
+> 
+>     |-----------------------------------------IOT_PROTOCOL_BUFFER_SIZE(1024)-----------------------------------|
+>
+>     |--MSCB(1)--|
+>  
+>                 |--LSCB(1)--| 
+>  
+>                             |--ID_SIZE(2)--| 
+>
+>                                            |--[PATH + ETX]--|
+>
+>                                                             |--[HEADER + ETX]--|
+>
+>                                                                                |--BODY_LENGTH_MAXIMUM_SIZE(4)--|
+> 
+> 
+
 ---
-### [0] **MCB**: MSB_CONTROL_BYTE
+### [0] **MSCB**: MSB_CONTROL_BYTE
 
 The Most Significant Control Byte.  **REQUIRED**
 
@@ -54,7 +81,7 @@ The Most Significant Control Byte.  **REQUIRED**
   - Range: `from 1 up to 63`. Zero is reserved.
 
 ---
-### [1] **LCB**: LSB_CONTROL_BYTE
+### [1] **LSCB**: LSB_CONTROL_BYTE
 
 The Least Significant Control Byte. **REQUIRED**
   * Size: `1 byte`
@@ -73,7 +100,7 @@ The Least Significant Control Byte. **REQUIRED**
 
 Methods Types
 
-|Name                 | Description                     | MCB::ID   | MCB::PATH | LCB::METHOD | LCB::HEADER | LCB::BODY | BODY::LENGTH            | Minimum Total Length  |
+|Name                 | Description                     | MSCB::ID   | MSCB::PATH | LSCB::METHOD | LSCB::HEADER | LSCB::BODY | BODY::LENGTH            | Minimum Total Length  |
 |:--                  | :--                             | :--:      | :--:      | :--:        | :--:      | :--:        | :--                     | :--:                  |
 | *Signal*            | Ligthweight signals like events | 0         | 0/1       | `0b000001`  | 0/1       | 0/1         | *up to 255 bytes*       | 2 bytes               |
 | *Request*           | Request that needs response     | 1         | 0/1       | `0b000010`  | 0/1       | 0/1         | *up to 65535 bytes*     | 4 bytes               |
