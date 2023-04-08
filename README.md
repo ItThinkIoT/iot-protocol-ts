@@ -47,7 +47,7 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 >        ----------------
 >          + 1016 Bytes : [PATH + ETX]_SIZE + [HEADER + ETX]_SIZE
 > 
->     |-----------------------------------------IOT_PROTOCOL_BUFFER_SIZE(1024)-----------------------------------|
+>     |--------------------------------IOT_PROTOCOL_BUFFER_SIZE(1024)-----------------------------|
 >
 >     |--MSCB(1)--|
 >  
@@ -55,11 +55,11 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 >  
 >                             |--ID_SIZE(2)--| 
 >
->                                            |--[PATH + ETX]--|
+>                                            |--PATH--|
 >
->                                                             |--[HEADER + ETX]--|
+>                                                     |--HEADER--|
 >
->                                                                                |--BODY_LENGTH_MAXIMUM_SIZE(4)--|
+>                                                                |--BODY_LENGTH_MAXIMUM_SIZE(4)--|
 > 
 > 
 
