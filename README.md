@@ -91,9 +91,9 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
   * binary: `0b011110`
 
 ---
-### [0] **MSCB**: MSB_CONTROL_BYTE
+### [0] **MSCB**
 
-The Most Significant Control Byte.  **REQUIRED**
+The **Most Significant Control Byte**.  **REQUIRED**
 
   * Size: `1 byte`
   * Default: `0b00000100` = `4` = `0x4`
@@ -108,9 +108,9 @@ The Most Significant Control Byte.  **REQUIRED**
   - Range: `from 1 up to 63`. Zero is reserved.
 
 ---
-### [1] **LSCB**: LSB_CONTROL_BYTE
+### [1] **LSCB**
 
-The Least Significant Control Byte. **REQUIRED**
+The **Least Significant Control Byte**. **REQUIRED**
   * Size: `1 byte`
   * Default: `0b00000100` = `4` = `0x4`
 
@@ -163,7 +163,7 @@ Format: `PATH + IOT_ETX`. **SINGLE**
   
 ---
 
-### [4] **HEADERS**:
+### [4] **HEADERs**:
 
 Headers are be Key Value Pair that serves to set an attribute value for the request. Case sensitive.  
 
