@@ -20,24 +20,26 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
   - Request-response model like HTTP protocol
   - Adaptive requests methods for optimizing data length
   - Multipart (Send large data)
+  - Streamming data
 
 ---
 
 ## Preamble Version 1
 
 ```
-<MSCB + LSCB>
+<MSCB>
+<LSCB>
 [ID]
-[PATH + IOT_ETX]
-[HEADER + IOT_ETX]
-[BODY_LENGTH + BODY] 
+[PATH]
+[HEADER]
+[BODY]
 ```
 
 > `<...>` REQUIRED
 
 > `[...]` OPTIONAL
 
-> `[PATH + IOT_ETX] + [HEADER + IOT_ETX]` **MUST NOT BE MORE THAN 1016 Bytes** 
+> `[PATH] + [HEADER]` **MUST NOT BE MORE THAN 1016 Bytes** 
 > 
 >       + 1024 Bytes : IOT_PROTOCOL_BUFFER_SIZE
 >          - 1 Byte  : MSCB_SIZE 
@@ -45,7 +47,7 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 >          - 2 Bytes : ID_SIZE 
 >          - 4 Bytes : BODY_LENGTH_MAXIMUM_SIZE (Streaming)
 >        ----------------
->          + 1016 Bytes : [PATH + IOT_ETX]_SIZE + [HEADER + IOT_ETX]_SIZE
+>          + 1016 Bytes > [PATH]_SIZE + [HEADER]_SIZE
 > 
 >     |--------------------------------IOT_PROTOCOL_BUFFER_SIZE(1024)-----------------------------|
 >
@@ -67,7 +69,7 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 
 ### IOT_PROTOCOL_BUFFER_SIZE
 
-**IOT_PROTOCOL_BUFFER_SIZE** is the maximum size to send or to receive per request. If `all data length > IOT_PROTOCOL_BUFFER_SIZE`, the data is broken in parts of *IOT_PROTOCOL_BUFFER_SIZE* length. Each part keeps the prefixed data (`MSCB + LSCB + ID + PATH + HEADER + BODY_LENGTH`) and attachs the remain body until its length is *IOT_PROTOCOL_BUFFER_SIZE* length or less.
+**IOT_PROTOCOL_BUFFER_SIZE** is the maximum size of request. If `all data length > IOT_PROTOCOL_BUFFER_SIZE`, the data is spplited in parts of *IOT_PROTOCOL_BUFFER_SIZE* length. Each part keeps the prefixed data (`MSCB + LSCB + ID + PATH + HEADER + BODY_LENGTH`) and attachs the remain body until its length is *IOT_PROTOCOL_BUFFER_SIZE* length or less.
 
 * Type: `size_t` | `uint32_t`
 * Size: `4 bytes`
@@ -102,7 +104,9 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 ---
 ### [0] **MSCB**
 
-The **Most Significant Control Byte**.  **REQUIRED**
+The **Most Significant Control Byte**.  
+
+Preamble: `<MSCB>` **REQUIRED** | **SINGLE**
 
   * Size: `1 byte`
   * Default: `0b00000100` = `4` = `0x4`
@@ -119,7 +123,10 @@ The **Most Significant Control Byte**.  **REQUIRED**
 ---
 ### [1] **LSCB**
 
-The **Least Significant Control Byte**. **REQUIRED**
+The **Least Significant Control Byte**.
+
+Preamble: `<LSCB>` **REQUIRED** | **SINGLE**
+
   * Size: `1 byte`
   * Default: `0b00000100` = `4` = `0x4`
 
@@ -148,7 +155,9 @@ Methods Types
 
 ### [2] **ID**: 
 
-Unsigned random number with up to 2^16 that identifies the request. **SINGLE**
+Unsigned random number with up to 2^16 that identifies the request.
+
+Preamble: `[<ID>]` **OPTIONAL** | **SINGLE**
 
 * Type: `uint16_t` as Big Endian format 
 * Size: `2 bytes`
@@ -163,7 +172,7 @@ Unsigned random number with up to 2^16 that identifies the request. **SINGLE**
 The path component contains data, usually organized in hierarchical
 form, that, serves to identify a resource [URI > 3.3 Path](https://www.rfc-editor.org/info/rfc3986). 
 
-Format: `PATH + IOT_ETX`. **SINGLE**
+Preamble: `[<PATH> + <IOT_ETX>]`. **OPTIONAL** | **SINGLE**
 
 #### **PATH**
 
@@ -172,23 +181,34 @@ Format: `PATH + IOT_ETX`. **SINGLE**
   
 ---
 
-### [4] **HEADERs**:
+### [4] **HEADER**:
 
-Headers are be Key Value Pair that serves to set an attribute value for the request. Case sensitive.  
+Header is a Key Value Pair that serves to set an attribute value for the request. Case sensitive. Maximum of 255 headers.
 
-Format: `HEADER + IOT_ETX`. **MULTIPLE**
+Preamble: `[<HEADER_SIZE> + <HEADERs>]`. **OPTIONAL** | **SINGLE**
 
-#### **HEADER**
+### **HEADER_SIZE** 
 
-* Type: `string`
-* Format: `KEY + IOT_RS + VALUE`
+The amount of headers from 1 until 255 headers. **REQUIRED** | **SINGLE**
+
+* Type: `byte` | `uint8_t`
+* Size: `1 byte`
+
+#### **HEADERs**
+
+The key-value pair of one header. 
+
+Preamble: `<KEY + IOT_RS + VALUE + IOT_ETX>` **REQUIRED** | **MULTIPLE** (Minimum 1)
+
+* Type: `uint8_t[]`
 * *KEY*: 
   * Type: `string`
 * *VALUE*: 
   * Type: `string`
+
 * Example: 
-  * Single header: `["foo", 0x1E, "bar", 0x3]`
-  * Multiple headers: `["foo", 0x1E, "bar", 0x3, "lorem", 0x1E, "ipsum", 0x3]`
+  * Single header (HEADER_SIZE = 1): `["foo", IOT_RS, "bar", IOT_ETX]` 
+  * Multiple headers (HEADER_SIZE = 2): `["foo", IOT_RS, "bar", IOT_ETX, "lorem", IOT_RS, "ipsum", IOT_ETX]` 
 
 
 ------------------
@@ -197,14 +217,14 @@ Format: `HEADER + IOT_ETX`. **MULTIPLE**
 
 The final data to be sent for request receiver. 
 
-Format: `BODY_LENGTH + BODY`. **OPTIONAL** | **SINGLE**
+Preamble: `[<BODY_LENGTH> + <BODY>]`. **OPTIONAL** | **SINGLE**
 
 #### **BODY_LENGTH**: 
 
 The body's length.  **REQUIRED**
 
   * Type: `uint8_t` | `uint16_t` | `uint32_t` as Big Endian format
-  * Size: `1 / 2 / 4 bytes.` *Depends on the applied method*
+  * Size: `1 / 2 / 4 bytes.` *Depends on the used method*
   * Example:
     * `uint8_t`
       * decimal: `17`
