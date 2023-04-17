@@ -3,14 +3,14 @@
 IoT Protocol is a protocol over TCP based on HTTP and MQTT for lightweight data traffic.
 
 **Motivation**: 
-  1. HTTP 1.1 (*http://*) protocol is a request-response model is well-suited for web-based applications where clients need to request resources from servers and receive responses back. It is still more commonly used and more widely known among developers. But it uses too much data traffic for IoT context. Its minimum request size is 26 bytes (https://stackoverflow.com/a/25065027/1956719) and the HOST param is mandatory for all requests. 
+  1. HTTP 1.1 (*http://*) protocol is a request-response model is well-suited for web-based applications where clients need to request resources from servers and receive responses back. It is still more commonly used and more widely known among developers. But it uses too much data traffic for IoT context. Its minimum request size is 16 bytes (https://stackoverflow.com/a/25065027/1956719) and the HOST param is mandatory for all requests. 
 
   2. MQTT (*mqtt://*) is a publish-subscribe messaging protocol, use lightweight data traffic. Its minimum request size is 2 bytes. But it is not stateless and does not provide a request/response pattern, so it isn't restful. MQTT is designed to be a lightweight protocol that minimizes network overhead, which can make it more challenging to handle large or complex data payloads.
 
-The **IOT PROTOCOL** (*iot://*) is based on HTTP and MQTT protocols over TCP/IP. Is a request-response model adapted for IoT context designed for low-bandwidth, low-power devices. Its minimum request size is 2 bytes without requiring the HOST param for all requests. Supports Full Duplex and can be used for real-time communication up to 255 bytes, middleweight request up to (2^16 -1) bytes (~65Kb) and streaming up to (2^32 -1) bytes (~4.29Gb). Can use TLS/SSL encryption to secure their communications.
+The **IOT PROTOCOL** (*iot://*) is based on HTTP and MQTT protocols over TCP/IP. Is a request-response model adapted for IoT context designed for low-bandwidth, low-power devices. Its minimum request size is 2 bytes without requiring the HOST param for all requests. Supports Full Duplex and can be used for real-time communication up to 255 bytes, middleweight request up to (2^16 -1) bytes (~65Kb) and streaming up to (2^32 -1) bytes (~4.29Gb). Can use TLS/SSL encryption to secure its communications.
 
 
-IOT PROTOCOL uses middlewares and router's filtering features based on [express nodejs module](https://expressjs.com/) under its Layer Application. Yes, you can use `.use(middleware)`, `.use('/path/to/your/resource', router)`, `response.send(data)` methods to handle the requests.
+IOT PROTOCOL uses middlewares and router's filtering features based on [express nodejs module](https://expressjs.com/) under its Application Layer. Yes, you can use `.use(middleware)`, `.use('/path/to/your/resource', router)`, `response.send(data)` methods to handle the requests.
 
 
 ## Features
@@ -21,6 +21,51 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
   - Adaptive requests methods for optimizing data length
   - Multipart (Send large data)
   - Streamming data
+
+---
+
+## **Comparison Summary** HTTP vs MQTT vs IOT
+
+|     | MQTT  | HTTP 1.1  | IOT   |
+| :-- | :--:  | :--:  | :--:  |
+| Full Name | MQTT (the OASIS standardization group decided it would not stand for anything) | Hyper Text Transfer Protocol | Internet Of Thing Protocol |
+| Architecture | Publish subscribe (MQTT does have a request/reply mode as well) | Request response | Request response |
+| Command targets | Topics | URIs | URIs |
+| Underlying Protocol | TCP/IP | TCP/IP | TCP/IP |
+| Secure connections | TLS + username/password (SASL support possible) | TLS + username/password (SASL support possible) | TLS + username/password (SASL support possible) |
+| Client observability | Known connection status (will messages) | Unknown connection status | Known connection status (will messages) |
+| Messaging Mode | Asynchronous, event-based | Synchronous | Asynchronous, event-based |
+| Message queuing | The broker can queue messages for disconnected subscribers | Application needs to implement | Application needs to implement |
+| Message overhead | 2 bytes minimum. Header data can be binary | 16 bytes minimum (header data is text - compression possible) + HOST | 2 bytes minimum|
+| Message Size | 256MB maximum | No limit but 256MB is beyond normal use cases anyway | 256 bytes / 65Kb / 4.29Gb maximum |
+| Content type | Any (binary) | Text (Base64 encoding for binary) | Any (binary) |
+| Message distribution | One to many | One to one | One to one (One to many not implemented yet) |
+| Reliability | Three qualities of service: 0 - fire and forget, 1 - at least once, 2 - once and only once | Has to be implemented in the application | Has to be implemented in the application |
+| Streaming | Application needs to implement | Application needs to implement | Yes |
+
+## **Overhead Performance in IoT**
+
+Overhead Performance in bytes for each operation
+
+|     | MQTT (bytes) | HTTP 1.1 (bytes) | IOT (bytes) |
+| :-- | :--:  | :--:  | :--:  |
+| Establish connection 
+| Disconnect 
+| For each message published 
+| Sum for 1 message 
+| Sum for 10 messages
+| Sum for 100 messages
+| Sum for 1000 messages
+
+## **Time Performance in IoT**
+
+Time Performance in ms for response time per message
+
+| No. messages in a connection | MQTT avg. response time per message (ms) (QoS 1) | HTTP avg. response time per message (ms) | IOT avg. response time per message (ms) (Request Method)  |
+| :--:| :--:  | :--:  | :--:  |
+| 1   | 113 | 289 | 
+| 100 | 47  | 289 | 
+| 1000| 43  | 289 | 
 
 ---
 
@@ -39,7 +84,9 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 
 > `[...]` OPTIONAL
 
-> `[PATH] + [HEADER]` **MUST NOT BE MORE THAN 1016 Bytes** 
+## Limitations
+
+> `(PATH + HEADER)` **MUST NOT BE MORE THAN 1016 Bytes** 
 > 
 >       + 1024 Bytes : IOT_PROTOCOL_BUFFER_SIZE
 >          - 1 Byte  : MSCB_SIZE 
@@ -64,6 +111,8 @@ IOT PROTOCOL uses middlewares and router's filtering features based on [express 
 >                                                                |--BODY_LENGTH_MAXIMUM_SIZE(4)--|
 > 
 > 
+
+> Maximum of 255 headers per request  
 
 ---
 
