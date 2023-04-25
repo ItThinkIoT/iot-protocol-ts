@@ -143,7 +143,7 @@ export class IoTProtocol {
 
         let offset = 0
 
-        if (buffer.length < offset) return
+        if (!buffer || buffer.length < 2) return
 
         const MSCB = buffer.at(offset)!
         const LSCB = buffer.at(++offset)!
