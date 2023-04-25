@@ -1,5 +1,6 @@
 import { Socket } from "net"
 import { TLSSocket } from "tls"
+import { Buffer } from 'node:buffer';
 import { delayPromise } from "./iot_helpers.js";
 
 export const IOT_VERSION = 0b000001;
@@ -143,10 +144,10 @@ export class IoTProtocol {
 
         let offset = 0
 
-        if (!buffer || buffer.length < 2) return
+        if (!Buffer.isBuffer(buffer) || buffer.length < 2) return
 
-        const MSCB = buffer.at(offset)!
-        const LSCB = buffer.at(++offset)!
+        const MSCB = buffer[offset]
+        const LSCB = buffer[++offset]!
 
         request.version = MSCB >> 2
         request.method = LSCB >> 2
@@ -207,7 +208,7 @@ export class IoTProtocol {
 
             request.bodyLength = 0
             for (let i = bodyLengthSize; i > 0; i--) {
-                request.bodyLength += buffer.at(++offset)! << ((i - 1) * 8)
+                request.bodyLength += buffer[++offset] << ((i - 1) * 8)
             }
             request.totalBodyLength = request.bodyLength
 
