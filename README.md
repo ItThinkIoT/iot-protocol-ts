@@ -198,7 +198,25 @@ Methods Types
 | *Request*           | Request that needs response     | 1         | 0/1       | `0b000010`  | 0/1       | 0/1         | *up to 65535 bytes*     | 4 bytes               |
 | *Response*          | Request's response              | 1         | 0         | `0b000011`  | 0/1       | 0/1         | *up to 65535 bytes*     | 4 bytes               |
 | *Streaming*         | Streaming data                  | 1         | 0/1       | `0b000100`  | 0/1       | 0/1         | *up to (2^32 -1) bytes* | 6 bytes               |
+| *Alive Request*      | Request Alive         | 0         | 0         | `0b000101`  | 0         | 0           | *0 bytes*               | 2 bytes               |
+| *Alive Respond*    | Respond the alive's request                        | 0         | 0         | `0b000110`  | 0         | 0           | *0 bytes*               | 2 bytes               |
 
+<details>
+
+> ### **Alive Method**
+> 
+> Heartbeat mechanism to determine if the connection is still alive or if it has been closed. 
+>
+> Both sides, client and server, keep sends alives requests. Who receives first, responds first and not emmit alives request. 
+>
+> Heartbeat interval defines the request period time in seconds. Client and server can have different heartbeat interval
+>
+> Default heartbeat interval: 60 seconds 
+> 
+> To disable heartbeat mechanism, set interval to 0 (zero) after start listen 
+>
+
+</details>
 
 ---
 

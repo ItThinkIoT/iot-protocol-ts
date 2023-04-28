@@ -21,22 +21,24 @@ export enum EIoTMethod {
     SIGNAL = 0x1,
     REQUEST = 0x2,
     RESPONSE = 0x3,
-    STREAMING = 0x4
+    STREAMING = 0x4,
+    ALIVE_REQUEST = 0x5,
+    ALIVE_RESPONSE = 0x6,
 }
 
 export interface IoTRequest {
-    version?: number,
-    method?: EIoTMethod,
-    id?: number,
-    path?: string,
+    version?: number
+    method?: EIoTMethod
+    id?: number
+    path?: string
     headers?: {
         [key: string]: string
-    },
-    body?: Buffer,
-    bodyLength?: number,
-    totalBodyLength?: number,
+    }
+    body?: Buffer
+    bodyLength?: number
+    totalBodyLength?: number
     parts?: number
-    client: TLSSocket | Socket
+    iotClient: IoTClient
 }
 
 export type Next = () => void
@@ -46,39 +48,53 @@ export type OnResponse = (response: IoTRequest) => void
 export type OnTimeout = (request: IoTRequest) => void
 
 export interface IoTRequestResponse {
-    onResponse: OnResponse,
-    onTimeout?: OnTimeout,
+    onResponse?: OnResponse
+    onTimeout?: OnTimeout
 
     timeout?: number
     timeoutHandle?: NodeJS.Timeout
+    request?: IoTRequest
 }
 
 export interface IoTMultiPart {
-    parts: number, /* Number of Parts */
+    parts: number /* Number of Parts */
     received: number /* Bytes received */
     timeout: number
 }
 
+export type OnDisconnect = (iotClient: IoTClient) => void
+
 export interface IoTClient {
-    id: string,
-    client: TLSSocket | Socket,
-    lockedForWrite: boolean
+    client: TLSSocket | Socket
+    requestResponse?: {
+        [id: number]: IoTRequestResponse
+    }
+    multiPartControl?: {
+        [id: number]: IoTMultiPart
+    }
+    remainBuffer?: Buffer | null
+    lockedForWrite?: boolean
+    /* Alive */
+    aliveInterval?: number
+    aliveNextRequest?: NodeJS.Timeout,
+
+    onDisconnect?: OnDisconnect
 }
+
 export class IoTProtocol {
 
-    private clients : {
+    private clients: {
         [clientId: string]: IoTClient
     } = {}
 
-    private requestResponse: {
-        [id: number]: IoTRequestResponse
-    } = {}
-
-    private multiPartControl: {
-        [id: number]: IoTMultiPart
-    } = {}
-
-    private remainBuffer: Buffer | null = null
+    private onAliveRequestTimeout: OnTimeout = (request) => {
+        /* Close client */
+        if(request.iotClient.aliveNextRequest) clearTimeout(request.iotClient.aliveNextRequest)
+        request.iotClient.client.destroy()
+        
+        if(request.iotClient.onDisconnect) request.iotClient.onDisconnect(request.iotClient)
+        delete this.clients[this.getClientId(request.iotClient)]
+    }
 
     public middlewares: Array<IoTMiddleware> = []
 
@@ -98,34 +114,44 @@ export class IoTProtocol {
         })
     }
 
-    getClientId(client: TLSSocket | Socket) : string {
-        return `${client.remoteAddress}_${client.remotePort}`
+    getClientId(iotClient: IoTClient): string {
+        return `${iotClient.client.remoteAddress}_${iotClient.client.remotePort}`
     }
 
-    listen(client: TLSSocket | Socket) {
-        const iotClient : IoTClient = {
-            client,
-            id: this.getClientId(client),
-            lockedForWrite: false
-        }   
-        this.clients[iotClient.id] = iotClient
+    listen(iotClient: IoTClient) {
+        if (!iotClient.client) {
+            throw new Error("[IoTProtocol] Client of IoTClient is null")
+        }
 
-        this.clients[iotClient.id].client.on("data", (buffer: Buffer) => {
-            if (this.remainBuffer !== null && this.remainBuffer.length > 0) {
-                buffer = Buffer.concat([this.remainBuffer, buffer])
-                this.resetRemainBuffer()
+        const id = this.getClientId(iotClient)
+
+        iotClient.requestResponse = {}
+        iotClient.multiPartControl = {}
+        iotClient.remainBuffer = null
+        iotClient.lockedForWrite = false
+        if (!iotClient.aliveInterval) {
+            iotClient.aliveInterval = 60
+        }
+        this.scheduleNextAliveRequest(iotClient)
+
+        this.clients[id] = iotClient
+
+        this.clients[id].client.on("data", (buffer: Buffer) => {
+            if (this.clients[id].remainBuffer !== null && this.clients[id].remainBuffer!.length > 0) {
+                buffer = Buffer.concat([this.clients[id].remainBuffer!, buffer])
+                this.resetRemainBuffer(iotClient)
             }
 
-            this.onData(client, buffer)
+            this.onData(iotClient, buffer)
         })
 
-        this.clients[iotClient.id].client.on("end", ()=>{
-            delete this.clients[iotClient.id]
+        this.clients[id].client.on("end", () => {
+            delete this.clients[id]
         })
     }
 
 
-    onData(client: TLSSocket | Socket, buffer: Buffer) {
+    onData(iotClient: IoTClient, buffer: Buffer) {
         // console.log("on data...", `[${buffer.length}] [${buffer.join(" , ")}]`)
         // console.log("on data...", `[${buffer.length}] > ${buffer.toString()}`)
 
@@ -139,7 +165,7 @@ export class IoTProtocol {
             bodyLength: 0,
             totalBodyLength: 0,
             parts: 0,
-            client
+            iotClient: iotClient
         }
 
         let offset = 0
@@ -151,6 +177,31 @@ export class IoTProtocol {
 
         request.version = MSCB >> 2
         request.method = LSCB >> 2
+
+        /* Alive Method */
+        if (request.method === EIoTMethod.ALIVE_REQUEST) {
+            console.log("Receive alive request");
+            /* Respond the alive Request */
+            this.aliveResponse({ iotClient })
+
+            /* Cancel next alive request and schedule another one from now */
+            this.scheduleNextAliveRequest(iotClient)
+
+            return
+        }
+        if (request.method === EIoTMethod.ALIVE_RESPONSE) {
+            console.log("Receive alive response");
+            // /* Cancel timeout */
+            // for (const rr of Object.values(iotClient.requestResponse!)) {
+            //     if (!rr.request) continue
+            //     if (rr.request.method !== EIoTMethod.ALIVE_REQUEST) {
+            //         continue
+            //     }
+
+            //     delete iotClient.requestResponse![rr.request.id!]
+            // }
+            // return
+        }
 
         /* ID */
         if (MSCB & IOT_MSCB_ID && buffer.length >= offset + 2) {
@@ -224,16 +275,16 @@ export class IoTProtocol {
             let bodyIncomeLength = buffer.length - offset
             let bodyEndIndex = offset + request.bodyLength
 
-            let multiPartControl = this.multiPartControl[request.id!]
+            let multiPartControl = iotClient.multiPartControl![request.id!]
             if (multiPartControl) {
                 bodyEndIndex -= multiPartControl.received
             } else {
-                this.multiPartControl[request.id!] = {
+                iotClient.multiPartControl![request.id!] = {
                     parts: 0,
                     received: 0,
                     timeout: IOT_MULTIPART_TIMEOUT
                 }
-                multiPartControl = this.multiPartControl[request.id!]
+                multiPartControl = iotClient.multiPartControl![request.id!]
             }
 
             if (bodyEndIndex > buffer.length) {
@@ -248,19 +299,19 @@ export class IoTProtocol {
 
             /* MultiPart Timeout */
             setTimeout(() => {
-                if (this.multiPartControl[request.id!]) {
-                    delete this.multiPartControl[request.id!]
+                if (iotClient.multiPartControl![request.id!]) {
+                    delete iotClient.multiPartControl![request.id!]
                 }
             }, multiPartControl.timeout)
 
             if (multiPartControl.received < request.totalBodyLength) {
                 requestCompleted = false
             } else {
-                delete this.multiPartControl[request.id!]
+                delete iotClient.multiPartControl![request.id!]
             }
 
             if (bodyIncomeLength > request.bodyLength) /* Income more than one request, so keeps it on remainBuffer */ {
-                this.remainBuffer = buffer.subarray(bodyEndIndex)
+                iotClient.remainBuffer = buffer.subarray(bodyEndIndex)
             }
 
             request.body = buffer.subarray(offset, bodyEndIndex)
@@ -269,12 +320,12 @@ export class IoTProtocol {
         }
 
         /* Response Response */
-        if (this.requestResponse[request.id!]) {
-            if (this.requestResponse[request.id!].onResponse != undefined) {
-                this.requestResponse[request.id!].onResponse(request)
+        if (iotClient.requestResponse![request.id!]) {
+            if (iotClient.requestResponse![request.id!].onResponse != undefined) {
+                iotClient.requestResponse![request.id!].onResponse!(request)
             }
             if (requestCompleted) {
-                delete this.requestResponse[request.id!]
+                delete iotClient.requestResponse![request.id!]
             } else {
                 this.startRequestResponseTimeout(request)
             }
@@ -285,11 +336,14 @@ export class IoTProtocol {
                 this.runMiddleware(request)
             }
         }
+
+        /* Cancel next alive request and schedule another one from now */
+        this.scheduleNextAliveRequest(iotClient)
     }
 
-    generateRequestId(): number {
+    generateRequestId(iotClient: IoTClient): number {
         const id = ((new Date()).getTime()) % 10000
-        if (this.requestResponse[id] || id == 0) return this.generateRequestId()
+        if (iotClient.requestResponse![id] || id == 0) return this.generateRequestId(iotClient)
         return id
     }
 
@@ -311,6 +365,30 @@ export class IoTProtocol {
     streaming(request: IoTRequest, requestResponse?: IoTRequestResponse): Promise<IoTRequest> {
         request.method = EIoTMethod.STREAMING
         return this.send(request, requestResponse)
+    }
+
+    aliveRequest(request: IoTRequest, requestResponse?: IoTRequestResponse): Promise<IoTRequest> {
+        console.log("Send alive request")
+        request.method = EIoTMethod.ALIVE_REQUEST
+        request.id = 0
+        delete request.path
+        delete request.headers
+        delete request.body
+        request.bodyLength = 0
+        request.parts = 0
+        return this.send(request, requestResponse)
+    }
+
+    aliveResponse(request: IoTRequest): Promise<IoTRequest> {
+        console.log("Send alive response")
+        request.method = EIoTMethod.ALIVE_RESPONSE
+        request.id = 0
+        delete request.path
+        delete request.headers
+        delete request.body
+        request.bodyLength = 0
+        request.parts = 0
+        return this.send(request)
     }
 
     async send(request: IoTRequest, requestResponse?: IoTRequestResponse): Promise<IoTRequest> {
@@ -348,6 +426,10 @@ export class IoTProtocol {
                 bodyLengthBuffer = Buffer.allocUnsafe(4)
                 if (request.body) bodyLengthBuffer.writeUInt32BE(request.body!.byteLength)
                 break
+            case EIoTMethod.ALIVE_REQUEST:
+            case EIoTMethod.ALIVE_RESPONSE:
+                bodyLengthBuffer = Buffer.from([])
+                break
         }
 
         const controlBytes = Buffer.from([MSCB, LSCB])
@@ -355,7 +437,7 @@ export class IoTProtocol {
         /* ID */
         let idBuffer = Buffer.allocUnsafe(2)
         if (MSCB & IOT_MSCB_ID) {
-            if (!request.id) request.id = this.generateRequestId()
+            if (!request.id) request.id = this.generateRequestId(request.iotClient)
             idBuffer.writeUInt16BE(request.id)
         } else {
             idBuffer = Buffer.from([])
@@ -370,7 +452,7 @@ export class IoTProtocol {
             const headersKeys = Object.keys(request.headers!)
 
             if (headersKeys.length > 255) {
-                throw new Error("Too many headers. Maximum Headers is 255.")
+                throw new Error("[IoTProtocol] Too many headers. Maximum Headers is 255.")
             }
 
             const headerSizeBuffer = Buffer.alloc(1)
@@ -382,7 +464,7 @@ export class IoTProtocol {
         }
 
         if ((pathBuffer.length + headerBuffer.length) > IOT_PROTOCOL_BUFFER_SIZE - 8) {
-            throw new Error("Path and Headers too big.")
+            throw new Error("[IoTProtocol] Path and Headers too big.")
         }
 
         /* BODY */
@@ -405,7 +487,8 @@ export class IoTProtocol {
             if (!requestResponse.timeout) {
                 requestResponse.timeout = this.timeout
             }
-            this.requestResponse[request.id!] = requestResponse
+            requestResponse.request = request
+            request.iotClient.requestResponse![request.id!] = requestResponse
         }
 
         return new Promise<IoTRequest>(async (resolve) => {
@@ -420,7 +503,12 @@ export class IoTProtocol {
                     ])
                     i = bodyUntilIndex
 
-                    request.client!.write(buffer, async () => {
+                    if(parts > 1 ) { /* Schedule next alive request after send all data only if is a multipart */
+                        /* Cancel and Schedule next alive request */
+                        this.scheduleNextAliveRequest(request.iotClient)
+                    }
+
+                    request.iotClient.client.write(buffer, async () => {
 
                         // console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
 
@@ -436,16 +524,15 @@ export class IoTProtocol {
                 })
             }
 
-            while(this.clients[this.getClientId(request.client)].lockedForWrite) {
-                await delayPromise(300)
-                // console.log(`awatting for free... Request Method (${EIoTMethod[request.method!]})`)
+            while (request.iotClient.lockedForWrite) {
+                await delayPromise(this.delay)
             }
-            this.clients[this.getClientId(request.client)].lockedForWrite = true
+            request.iotClient.lockedForWrite = true
             request.parts = await writeBodyPart()
-            this.clients[this.getClientId(request.client)].lockedForWrite = false
+            request.iotClient.lockedForWrite = false
 
             /* Timeout */
-            if (this.requestResponse[request.id!]) {
+            if (request.iotClient.requestResponse![request.id!]) {
                 this.startRequestResponseTimeout(request)
             }
 
@@ -453,22 +540,35 @@ export class IoTProtocol {
         })
     }
 
-    resetRemainBuffer() {
-        this.remainBuffer = null
+    resetRemainBuffer(iotClient: IoTClient) {
+        iotClient.remainBuffer = null
     }
 
     startRequestResponseTimeout = (request: IoTRequest) => {
-        let requestResponse = this.requestResponse[request.id!]
+        let requestResponse = request.iotClient.requestResponse![request.id!]
         if (requestResponse.timeoutHandle) clearTimeout(requestResponse.timeoutHandle)
 
         requestResponse.timeoutHandle = setTimeout(() => {
-            if (this.requestResponse[request.id!]) {
-                if (this.requestResponse[request.id!].onTimeout) {
-                    this.requestResponse[request.id!].onTimeout!(request);
+            if (request.iotClient.requestResponse![request.id!]) {
+                if (request.iotClient.requestResponse![request.id!].onTimeout) {
+                    request.iotClient.requestResponse![request.id!].onTimeout!(request);
                 }
-                delete this.requestResponse[request.id!]
+                delete request.iotClient.requestResponse![request.id!]
             }
         }, requestResponse.timeout || this.timeout)
+    }
+
+    scheduleNextAliveRequest(iotClient: IoTClient) {
+        if (iotClient.aliveNextRequest) clearTimeout(iotClient.aliveNextRequest) //cancel if exists
+        iotClient.aliveNextRequest = setTimeout(() => {
+            if (iotClient.aliveInterval === 0) return
+
+            /* Send Alive Request */
+            this.aliveRequest({ iotClient }, { onTimeout: this.onAliveRequestTimeout.bind(this), timeout: this.timeout })
+
+            /* Schedule the next alive request */
+            this.scheduleNextAliveRequest(iotClient)
+        }, iotClient.aliveInterval! * 1000)
     }
 
 }
