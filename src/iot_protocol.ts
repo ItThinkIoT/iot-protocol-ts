@@ -354,7 +354,6 @@ export class IoTProtocol {
     }
 
     aliveRequest(request: IoTRequest, requestResponse?: IoTRequestResponse): Promise<IoTRequest> {
-        console.log("Send alive request")
         request.method = EIoTMethod.ALIVE_REQUEST
         request.id = 0
         delete request.path
@@ -366,7 +365,6 @@ export class IoTProtocol {
     }
 
     aliveResponse(request: IoTRequest): Promise<IoTRequest> {
-        console.log("Send alive response")
         request.method = EIoTMethod.ALIVE_RESPONSE
         request.id = 0
         delete request.path
