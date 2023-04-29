@@ -180,7 +180,6 @@ export class IoTProtocol {
 
         /* Alive Method */
         if (request.method === EIoTMethod.ALIVE_REQUEST) {
-            console.log("Receive alive request");
             /* Respond the alive Request */
             this.aliveResponse({ iotClient })
 
@@ -188,19 +187,6 @@ export class IoTProtocol {
             this.scheduleNextAliveRequest(iotClient)
 
             return
-        }
-        if (request.method === EIoTMethod.ALIVE_RESPONSE) {
-            console.log("Receive alive response");
-            // /* Cancel timeout */
-            // for (const rr of Object.values(iotClient.requestResponse!)) {
-            //     if (!rr.request) continue
-            //     if (rr.request.method !== EIoTMethod.ALIVE_REQUEST) {
-            //         continue
-            //     }
-
-            //     delete iotClient.requestResponse![rr.request.id!]
-            // }
-            // return
         }
 
         /* ID */
@@ -331,7 +317,7 @@ export class IoTProtocol {
             }
         }
         else {
-            if (request.method !== EIoTMethod.RESPONSE) {
+            if (request.method !== EIoTMethod.RESPONSE && request.method !== EIoTMethod.ALIVE_RESPONSE) {
                 /* Middleware */
                 this.runMiddleware(request)
             }
