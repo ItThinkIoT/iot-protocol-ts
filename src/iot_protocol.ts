@@ -326,7 +326,9 @@ export class IoTProtocol {
             }
         }
         else {
-            if (request.method !== EIoTMethod.RESPONSE && request.method !== EIoTMethod.ALIVE_RESPONSE) {
+            if (request.method === EIoTMethod.SIGNAL ||
+                request.method === EIoTMethod.REQUEST ||
+                request.method === EIoTMethod.STREAMING) {
                 /* Middleware */
                 this.runMiddleware(request)
             }
