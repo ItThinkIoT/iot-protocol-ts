@@ -1,6 +1,6 @@
 {
   "name": "iot-protocol-ts",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "IoT Protocol Library for Typescript",
   "main": "dist/iot_protocol.js",
   "type": "module",

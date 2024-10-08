@@ -194,12 +194,13 @@ Methods Types
 
 |Name                 | Description                     | MSCB::ID   | MSCB::PATH | LSCB::METHOD | LSCB::HEADER | LSCB::BODY | BODY::LENGTH            | Minimum Total Length  |
 |:--                  | :--                             | :--:      | :--:      | :--:        | :--:      | :--:        | :--                     | :--:                  |
-| *Signal*            | Ligthweight signals like events | 0         | 0/1       | `0b000001`  | 0/1       | 0/1         | *up to 255 bytes*       | 2 bytes               |
-| *Request*           | Request that needs response     | 1         | 0/1       | `0b000010`  | 0/1       | 0/1         | *up to 65535 bytes*     | 4 bytes               |
-| *Response*          | Request's response              | 1         | 0         | `0b000011`  | 0/1       | 0/1         | *up to 65535 bytes*     | 4 bytes               |
-| *Streaming*         | Streaming data                  | 1         | 0/1       | `0b000100`  | 0/1       | 0/1         | *up to (2^32 -1) bytes* | 6 bytes               |
-| *Alive Request*      | Request Alive         | 0         | 0         | `0b000101`  | 0         | 0           | *0 bytes*               | 2 bytes               |
-| *Alive Respond*    | Respond the alive's request                        | 0         | 0         | `0b000110`  | 0         | 0           | *0 bytes*               | 2 bytes               |
+| *Signal*            | Ligthweight signals like events | 0         | 0/1       | `0b000001`  | 0/1       | 0/1         | `1 byte` => body_content *up to 255 bytes*       | 2 bytes               |
+| *Request*           | Request that needs response     | 1         | 0/1       | `0b000010`  | 0/1       | 0/1         | `2 bytes` => body_content *up to 65535 bytes*     | 4 bytes               |
+| *Response*          | Request's response              | 1         | 0         | `0b000011`  | 0/1       | 0/1         | `2 bytes` => body_content *up to 65535 bytes*     | 4 bytes               |
+| *Streaming*         | Streaming data                  | 1         | 0/1       | `0b000100`  | 0/1       | 0/1         | `4 bytes` => body_content *up to (2^32 -1) bytes* | 6 bytes               |
+| *Alive Request*     | Request Alive         | 0         | 0         | `0b000101`  | 0         | 0           | `0 byte`               | 2 bytes               |
+| *Alive Response*    | Respond the alive's request                        | 0         | 0         | `0b000110`  | 0         | 0           | `0 byte`               | 2 bytes               |
+| *Buffer Size*       | Set buffer size                 | 0         | 0         | `0b000111`  | 0         | 1           | `1 byte` fixed with value `4` => body_content is `uint32_t`             | 7 bytes               |
 
 <details>
 
@@ -214,6 +215,19 @@ Methods Types
 > Default heartbeat interval: 60 seconds 
 > 
 > To disable heartbeat mechanism, set interval to 0 (zero) after start listen 
+>
+
+> ### **Buffer Size**
+> 
+> Buffer Size method allows to change the size of buffer for the next data transfers.
+>
+> Default buffer size: 1024 bytes.
+>
+> `BODY::LENGTH`: fixed at 4 bytes.
+> 
+> `BODY`: `uint32_t` (4 bytes as Big Endian format) allows set the buffer size up to (2^32 -1) bytes.
+>
+> To set to default value (1024) set body to 0 (zero).
 >
 
 </details>
@@ -308,9 +322,9 @@ The body's length.  **REQUIRED**
       * uint_8[4]: `[ 0, 1, 9 , 17 ]`
       * binary: `0b00000000 00000001 00001001 00010001`
 
-#### **BODY**:
+#### **BODY_CONTENT**:
 
-The body / contents of request. **REQUIRED**
+The body contents of request. **REQUIRED**
 
 * Type: `uint8_t[]`
 * Example:
