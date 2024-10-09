@@ -86,9 +86,9 @@ Time Performance in ms for response time per message
 
 ## Limitations
 
-> `(PATH + HEADER)` **MUST NOT BE MORE THAN 1016 Bytes** 
+> `(PATH + HEADER)` **MUST NOT BE MORE THAN 1016 Bytes with IOT_PROTOCOL_DEFAULT_BUFFER_SIZE (1024 bytes)** 
 > 
->       + 1024 Bytes : IOT_PROTOCOL_BUFFER_SIZE
+>       + 1024 Bytes : IOT_PROTOCOL_DEFAULT_BUFFER_SIZE
 >          - 1 Byte  : MSCB_SIZE 
 >          - 1 Byte  : LSCB_SIZE 
 >          - 2 Bytes : ID_SIZE 
@@ -96,7 +96,7 @@ Time Performance in ms for response time per message
 >        ----------------
 >          + 1016 Bytes > [PATH]_SIZE + [HEADER]_SIZE
 > 
->     |--------------------------------IOT_PROTOCOL_BUFFER_SIZE(1024)-----------------------------|
+>     |---------------------------------------BUFFER_SIZE(1024)-----------------------------------|
 >
 >     |--MSCB(1)--|
 >  
@@ -110,19 +110,21 @@ Time Performance in ms for response time per message
 >
 >                                                                |--BODY_LENGTH_MAXIMUM_SIZE(4)--|
 > 
-> 
+> BUFFER_SIZE can be increase using *Buffer Size Request/Response* methods
+>
 
 > Maximum of 255 headers per request  
 
 ---
 
-### IOT_PROTOCOL_BUFFER_SIZE
+### BUFFER_SIZE
 
-**IOT_PROTOCOL_BUFFER_SIZE** is the maximum size of request. If `all data length > IOT_PROTOCOL_BUFFER_SIZE`, the data is spplited in parts of *IOT_PROTOCOL_BUFFER_SIZE* length. Each part keeps the prefixed data (`MSCB + LSCB + ID + PATH + HEADER + BODY_LENGTH`) and attachs the remain body until its length is *IOT_PROTOCOL_BUFFER_SIZE* length or less.
+**BUFFER_SIZE** is the maximum size of single transmission data (packet). If `all data length > IOT_PROTOCOL_BUFFER_SIZE`, the data is spplited in parts of *IOT_PROTOCOL_BUFFER_SIZE* length. Each part keeps the prefixed data (`MSCB + LSCB + ID + PATH + HEADER + BODY_LENGTH`) and attachs the remain body until its length is *BUFFER_SIZE* length or equals to body length.
 
 * Type: `size_t` | `uint32_t`
 * Size: `4 bytes`
 * Default value: `1024`
+* Can be changed using *Buffer Size Request/Response* methods
 ---
 
 ### IOT_ETX
@@ -186,21 +188,22 @@ Preamble: `<LSCB>` **REQUIRED** | **SINGLE**
 | BODY      | Enable = 1 / Disable = 0 **BODY**           |       |       |       |       |       |       |       | x     | *0b*0       |
 
 
-#### METHOD:
+#### METHODs:
 
   - Range: `from 1 up to 63`. Zero is reserved.
 
 Methods Types
 
-|Name                 | Description                     | MSCB::ID   | MSCB::PATH | LSCB::METHOD | LSCB::HEADER | LSCB::BODY | BODY::LENGTH            | Minimum Total Length  |
-|:--                  | :--                             | :--:      | :--:      | :--:        | :--:      | :--:        | :--                     | :--:                  |
-| *Signal*            | Ligthweight signals like events | 0         | 0/1       | `0b000001`  | 0/1       | 0/1         | `1 byte` => body_content *up to 255 bytes*       | 2 bytes               |
-| *Request*           | Request that needs response     | 1         | 0/1       | `0b000010`  | 0/1       | 0/1         | `2 bytes` => body_content *up to 65535 bytes*     | 4 bytes               |
-| *Response*          | Request's response              | 1         | 0         | `0b000011`  | 0/1       | 0/1         | `2 bytes` => body_content *up to 65535 bytes*     | 4 bytes               |
-| *Streaming*         | Streaming data                  | 1         | 0/1       | `0b000100`  | 0/1       | 0/1         | `4 bytes` => body_content *up to (2^32 -1) bytes* | 6 bytes               |
-| *Alive Request*     | Request Alive         | 0         | 0         | `0b000101`  | 0         | 0           | `0 byte`               | 2 bytes               |
-| *Alive Response*    | Respond the alive's request                        | 0         | 0         | `0b000110`  | 0         | 0           | `0 byte`               | 2 bytes               |
-| *Buffer Size*       | Set buffer size                 | 0         | 0         | `0b000111`  | 0         | 1           | `1 byte` fixed with value `4` => body_content is `uint32_t`             | 7 bytes               |
+|Name                 | Description                     | MSCB_ID   | MSCB_PATH | LSCB_METHOD | LSCB_HEADER | LSCB_BODY | BODY_LENGTH            | BODY_CONTENT | Minimum Total Length  |
+|:--                  | :--                             | :--:      | :--:      | :--:        | :--:      | :--:        | :--                     | --:                  | :--:                  |
+| *Signal*            | Ligthweight signals like events | 0         | 0/1       | `0b000001`  | 0/1       | 0/1         | `1 byte` | *up to 255 bytes*       | 2 bytes               |
+| *Request*           | Request that needs response     | 1         | 0/1       | `0b000010`  | 0/1       | 0/1         | `2 bytes` | *up to 65535 bytes*     | 4 bytes               |
+| *Response*          | Request's response              | 1         | 0         | `0b000011`  | 0/1       | 0/1         | `2 bytes` | *up to 65535 bytes*     | 4 bytes               |
+| *Streaming*         | Streaming data                  | 1         | 0/1       | `0b000100`  | 0/1       | 0/1         | `4 bytes` | *up to (2^32 -1) bytes* | 6 bytes               |
+| *Alive Request*     | Request Alive         | 0         | 0         | `0b000101`  | 0         | 0           | `0 byte`|   `0 byte`               | 2 bytes               |
+| *Alive Response*    | Respond the alive's request                        | 0         | 0         | `0b000110`  | 0         | 0           | `0 byte` |   `0 byte`    | 2 bytes               |
+| *Buffer Size Request*       | Request to change buffer size                 | 0         | 0         | `0b000111`  | 0         | 1           | `1 byte` fixed with value `= 4` | `4 bytes`             | 7 bytes               |
+| *Buffer Size Response*       | Respond to change of buffer size   | 0         | 0         | `0b001000`  | 0         | 1           | `1 byte` fixed with value `= 4` | `4 bytes`             | 7 bytes               |
 
 <details>
 
@@ -223,9 +226,9 @@ Methods Types
 >
 > Default buffer size: 1024 bytes.
 >
-> `BODY::LENGTH`: fixed at 4 bytes.
+> `BODY_LENGTH`: fixed with value ` = 4` (bytes).
 > 
-> `BODY`: `uint32_t` (4 bytes as Big Endian format) allows set the buffer size up to (2^32 -1) bytes.
+> `BODY_CONTENT`: `uint32_t` (4 bytes as Big Endian format) allows set the buffer size up to (2^32 -1) bytes.
 >
 > To set to default value (1024) set body to 0 (zero).
 >
