@@ -49,10 +49,11 @@ export type IoTMiddleware = (request: IoTRequest, next: Next) => void
 
 export type OnResponse = (response: IoTRequest) => void
 export type OnTimeout = (request: IoTRequest) => void
-
+export type OnPartSent = (request: IoTRequest, totalDataSent: number, part: number) => void
 export interface IoTRequestResponse {
     onResponse?: OnResponse
     onTimeout?: OnTimeout
+    onPartSent?: OnPartSent
 
     timeout?: number
     timeoutHandle?: NodeJS.Timeout
@@ -542,6 +543,9 @@ export class IoTProtocol {
                     request.iotClient.client.write(buffer, async () => {
 
                         // console.log("sent buffer...", `[${buffer.length}] => [${buffer.join(" , ")}]`)
+                        if(requestResponse && requestResponse.onPartSent) {
+                            requestResponse.onPartSent(request, i, parts)
+                        }
 
                         parts++
 
